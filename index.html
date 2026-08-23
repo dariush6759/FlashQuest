@@ -122,10 +122,14 @@ a{color:inherit; text-decoration:none;}
 
 .btn{display:inline-flex; align-items:center; gap:8px; padding:12px 20px; border-radius:100px; border:none; font-weight:700; font-size:14px; transition:all .2s var(--ease); letter-spacing:-.01em;}
 .btn:active{transform:scale(.95);}
+.btn:hover{transform:translateY(-2px);}
 .btn-primary{background:var(--accent); color:#fff; box-shadow:0 6px 16px rgba(0,113,227,.35);}
-.btn-primary:hover{background:#0077ed; box-shadow:0 8px 20px rgba(0,113,227,.45); transform:translateY(-2px);}
+.btn-primary:hover{background:#0077ed; box-shadow:0 8px 20px rgba(0,113,227,.45); transform:translateY(-3px);}
 .btn-secondary{background:var(--surface); color:var(--text); border:1px solid var(--border-strong); box-shadow:var(--shadow-xs);}
 .btn-secondary:hover{background:var(--surface-secondary); border-color:var(--border-strong); box-shadow:var(--shadow-sm);}
+
+.brand-icon{width:32px; height:32px; border-radius:10px; background:linear-gradient(140deg, #0071e3, #6e5de7); display:flex; align-items:center; justify-content:center; color:#fff; font-size:16px; font-weight:700; box-shadow:0 4px 12px rgba(0,113,227,.4); transition:all .3s var(--ease);}
+.brand:hover .brand-icon{box-shadow:0 6px 16px rgba(0,113,227,.5);}
 
 input, textarea{
   width:100%; background:var(--surface-secondary); border:1px solid var(--border-strong); border-radius:var(--radius-sm);
@@ -147,6 +151,16 @@ input:focus, textarea:focus{border-color:var(--accent); box-shadow:0 0 0 4px var
 .modal-title{font-size:20px; font-weight:800; margin-bottom:20px; color:var(--text);}
 .modal-actions{display:flex; gap:10px; justify-content:flex-end; margin-top:24px;}
 
+@keyframes confettiFall{
+  0%{opacity:1; transform:translateY(0) rotate(0deg) scale(1);}
+  100%{opacity:0; transform:translateY(100vh) rotate(720deg) scale(0);}
+}
+
+@keyframes xpFly{
+  0%{opacity:1; transform:translateY(0) scale(1);}
+  100%{opacity:0; transform:translateY(-60px) scale(0.5);}
+}
+
 .flip-container{perspective:1200px; width:100%; height:400px; cursor:pointer;}
 .flip-card{width:100%; height:100%; position:relative; transform-style:preserve-3d; transition:transform .6s cubic-bezier(.34,.85,.3,1);}
 .flip-card.flipped{transform:rotateY(180deg);}
@@ -164,6 +178,7 @@ input:focus, textarea:focus{border-color:var(--accent); box-shadow:0 0 0 4px var
 .rate-buttons.show{opacity:1; pointer-events:auto; transform:translateY(0);}
 .rate-btn{padding:12px 6px; border-radius:14px; background:var(--surface); border:2px solid var(--border); font-size:12px; font-weight:700; text-align:center; transition:all .2s var(--ease);}
 .rate-btn:hover{transform:translateY(-3px); box-shadow:var(--shadow-sm);}
+.rate-btn:active{transform:scale(.95);}
 .rate-btn.r1{border-color:rgba(255,59,48,.3); color:#ff3b30;}
 .rate-btn.r1:hover{background:rgba(255,59,48,.1);}
 .rate-btn.r2{border-color:rgba(255,149,0,.3); color:#ff9500;}
@@ -172,6 +187,9 @@ input:focus, textarea:focus{border-color:var(--accent); box-shadow:0 0 0 4px var
 .rate-btn.r3:hover{background:rgba(0,113,227,.1);}
 .rate-btn.r4{border-color:rgba(47,179,80,.3); color:#2fb350;}
 .rate-btn.r4:hover{background:rgba(47,179,80,.1);}
+
+.card-icon{width:48px; height:48px; border-radius:12px; background:linear-gradient(135deg, #f5f5f7, #efefef); display:flex; align-items:center; justify-content:center; font-size:22px; margin-bottom:12px; transition:all .3s var(--ease);}
+.card:hover .card-icon{transform:scale(1.1) rotate(-2deg);}
 
 .toast{position:fixed; top:20px; left:50%; transform:translateX(-50%); background:var(--surface); border:1px solid var(--border-strong); color:var(--text); padding:12px 22px; border-radius:100px; font-size:13px; font-weight:700; box-shadow:var(--shadow-lg); z-index:300; animation:toastIn .35s var(--ease), toastOut .35s var(--ease) 2.65s forwards;}
 @keyframes toastIn{from{opacity:0; transform:translateX(-50%) translateY(-12px) scale(.92);} to{opacity:1; transform:translateX(-50%) translateY(0) scale(1);}}
@@ -322,66 +340,234 @@ class SoundController {
   init(){
     try{
       this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      // Resume audio context on user interaction (browser requirement)
+      if(this.audioContext.state === 'suspended'){
+        document.addEventListener('click', () => this.resume(), { once: true });
+        document.addEventListener('touchstart', () => this.resume(), { once: true });
+      }
     }catch(e){
-      console.log('Audio not available');
+      console.log('Audio not available:', e);
+    }
+  }
+  
+  resume(){
+    if(this.audioContext && this.audioContext.state === 'suspended'){
+      this.audioContext.resume().then(() => {
+        console.log('Audio context resumed');
+      });
     }
   }
 
   play(type){
-    if(!this.audioContext || this.audioContext.state === 'suspended') return;
+    if(!this.audioContext) return;
+    
+    // Try to resume if suspended
+    if(this.audioContext.state === 'suspended'){
+      this.audioContext.resume();
+      return;
+    }
+    
     const ctx = this.audioContext;
     const now = ctx.currentTime;
     
     if(type === 'tap'){
+      // Soft click sound
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.connect(gain);
+      const filter = ctx.createBiquadFilter();
+      
+      osc.type = 'triangle';
+      osc.connect(filter);
+      filter.connect(gain);
       gain.connect(ctx.destination);
-      osc.frequency.setValueAtTime(800, now);
-      osc.frequency.exponentialRampToValueAtTime(600, now + 0.05);
-      gain.gain.setValueAtTime(0.1, now);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+      
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(3000, now);
+      filter.frequency.exponentialRampToValueAtTime(1000, now + 0.08);
+      
+      osc.frequency.setValueAtTime(600, now);
+      osc.frequency.exponentialRampToValueAtTime(300, now + 0.08);
+      
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+      
       osc.start(now);
-      osc.stop(now + 0.05);
+      osc.stop(now + 0.08);
     }
     else if(type === 'success'){
+      // Three rising tones with harmonics
       const notes = [523.25, 659.25, 783.99];
       notes.forEach((freq, i) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.connect(gain);
+        const filter = ctx.createBiquadFilter();
+        
+        osc.type = 'sine';
+        osc.connect(filter);
+        filter.connect(gain);
         gain.connect(ctx.destination);
+        
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(4000, now + i * 0.05);
+        
         osc.frequency.setValueAtTime(freq, now + i * 0.05);
-        gain.gain.setValueAtTime(0.08, now + i * 0.05);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.05 + 0.1);
+        
+        gain.gain.setValueAtTime(0, now + i * 0.05);
+        gain.gain.linearRampToValueAtTime(0.15, now + i * 0.05 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.05 + 0.12);
+        
         osc.start(now + i * 0.05);
-        osc.stop(now + i * 0.05 + 0.1);
+        osc.stop(now + i * 0.05 + 0.12);
       });
     }
     else if(type === 'flip'){
+      // Swipe sound
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.connect(gain);
+      const filter = ctx.createBiquadFilter();
+      
+      osc.type = 'triangle';
+      osc.connect(filter);
+      filter.connect(gain);
       gain.connect(ctx.destination);
+      
+      filter.type = 'highpass';
+      filter.frequency.setValueAtTime(2000, now);
+      filter.frequency.linearRampToValueAtTime(4000, now + 0.12);
+      
       osc.frequency.setValueAtTime(1200, now);
-      osc.frequency.exponentialRampToValueAtTime(800, now + 0.08);
-      gain.gain.setValueAtTime(0.08, now);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+      osc.frequency.exponentialRampToValueAtTime(800, now + 0.12);
+      
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      
       osc.start(now);
-      osc.stop(now + 0.08);
+      osc.stop(now + 0.12);
     }
     else if(type === 'levelup'){
+      // Ascending fanfare
       const notes = [659.25, 783.99, 1046.50];
       notes.forEach((freq, i) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.connect(gain);
+        const filter = ctx.createBiquadFilter();
+        
+        osc.type = 'sine';
+        osc.connect(filter);
+        filter.connect(gain);
         gain.connect(ctx.destination);
-        osc.frequency.setValueAtTime(freq, now + i * 0.06);
-        gain.gain.setValueAtTime(0.1, now + i * 0.06);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.06 + 0.12);
-        osc.start(now + i * 0.06);
-        osc.stop(now + i * 0.06 + 0.12);
+        
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(5000, now + i * 0.08);
+        
+        osc.frequency.setValueAtTime(freq, now + i * 0.08);
+        
+        gain.gain.setValueAtTime(0, now + i * 0.08);
+        gain.gain.linearRampToValueAtTime(0.18, now + i * 0.08 + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.16);
+        
+        osc.start(now + i * 0.08);
+        osc.stop(now + i * 0.08 + 0.16);
+      });
+    }
+    else if(type === 'correct'){
+      // Two rising affirming tones
+      const notes = [783.99, 987.77];
+      notes.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+        
+        osc.type = 'sine';
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+        
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(4500, now + i * 0.1);
+        
+        osc.frequency.setValueAtTime(freq, now + i * 0.1);
+        
+        gain.gain.setValueAtTime(0, now + i * 0.1);
+        gain.gain.linearRampToValueAtTime(0.16, now + i * 0.1 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.1 + 0.14);
+        
+        osc.start(now + i * 0.1);
+        osc.stop(now + i * 0.1 + 0.14);
+      });
+    }
+    else if(type === 'wrong'){
+      // Descending error sound
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+      
+      osc.type = 'sine';
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(2000, now);
+      filter.frequency.exponentialRampToValueAtTime(500, now + 0.2);
+      
+      osc.frequency.setValueAtTime(350, now);
+      osc.frequency.exponentialRampToValueAtTime(150, now + 0.2);
+      
+      gain.gain.setValueAtTime(0.14, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+      
+      osc.start(now);
+      osc.stop(now + 0.2);
+    }
+    else if(type === 'delete'){
+      // Quick descending beep
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+      
+      osc.type = 'triangle';
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(3000, now);
+      filter.frequency.exponentialRampToValueAtTime(800, now + 0.12);
+      
+      osc.frequency.setValueAtTime(700, now);
+      osc.frequency.exponentialRampToValueAtTime(300, now + 0.12);
+      
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      
+      osc.start(now);
+      osc.stop(now + 0.12);
+    }
+    else if(type === 'achievement'){
+      // Celebratory chord
+      const notes = [523.25, 659.25, 783.99, 1046.50];
+      notes.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+        
+        osc.type = 'sine';
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+        
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(5000, now);
+        
+        osc.frequency.setValueAtTime(freq, now + i * 0.03);
+        
+        gain.gain.setValueAtTime(0, now + i * 0.03);
+        gain.gain.linearRampToValueAtTime(0.15, now + i * 0.03 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+        
+        osc.start(now + i * 0.03);
+        osc.stop(now + 0.25);
       });
     }
   }
@@ -391,12 +577,29 @@ const sound = new SoundController();
 
 /* ============================= UI HELPERS ============================= */
 function nav(page){
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  document.querySelector(`[data-page="${page}"]`).classList.add('active');
+  // Hide all views
+  document.querySelectorAll('.view').forEach(v => {
+    v.classList.remove('active');
+    v.style.display = '';
+  });
   
-  if(page === 'home') renderHome();
-  else if(page === 'dashboard') renderDashboard();
+  // Hide study view
+  document.getElementById('study-view').classList.remove('active');
+  document.getElementById('study-view').style.display = '';
+  
+  // Update nav buttons
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`[data-page="${page}"]`)?.classList.add('active');
+  
+  // Show target view
+  if(page === 'home'){
+    document.getElementById('home-view').classList.add('active');
+    renderHome();
+  }
+  else if(page === 'dashboard'){
+    document.getElementById('dashboard-view').classList.add('active');
+    renderDashboard();
+  }
   
   sound.play('tap');
 }
@@ -415,8 +618,49 @@ function showAchievement(name, desc, icon = '🎯'){
   document.getElementById('achvDesc').textContent = desc;
   const overlay = document.getElementById('achvOverlay');
   overlay.classList.add('show');
-  sound.play('levelup');
-  setTimeout(() => overlay.classList.remove('show'), 2000);
+  sound.play('achievement');
+  burstConfetti(true);
+  setTimeout(() => overlay.classList.remove('show'), 2500);
+}
+
+function burstConfetti(big = false){
+  const colors = ['#0071e3', '#2fb350', '#ff9500', '#6e5de7', '#ff3b30'];
+  const count = big ? 50 : 30;
+  
+  for(let i = 0; i < count; i++){
+    const conf = document.createElement('div');
+    conf.style.position = 'fixed';
+    conf.style.width = big ? '12px' : '8px';
+    conf.style.height = big ? '12px' : '8px';
+    conf.style.background = colors[Math.floor(Math.random() * colors.length)];
+    conf.style.left = Math.random() * 100 + '%';
+    conf.style.top = '-20px';
+    conf.style.borderRadius = '50%';
+    conf.style.pointerEvents = 'none';
+    conf.style.zIndex = '299';
+    conf.style.boxShadow = '0 0 ' + (big ? '8px' : '4px') + ' currentColor';
+    conf.style.animation = `confettiFall ${1.5 + Math.random() * 1}s linear forwards`;
+    conf.style.filter = `hue-rotate(${Math.random() * 360}deg)`;
+    document.body.appendChild(conf);
+    
+    setTimeout(() => conf.remove(), 3000);
+  }
+}
+
+function flyXp(amount, x, y){
+  const el = document.createElement('div');
+  el.textContent = '+' + amount;
+  el.style.position = 'fixed';
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  el.style.fontSize = '14px';
+  el.style.fontWeight = '800';
+  el.style.color = '#0071e3';
+  el.style.pointerEvents = 'none';
+  el.style.zIndex = '299';
+  el.style.animation = 'xpFly .8s cubic-bezier(.34,1.56,.64,1) forwards';
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 800);
 }
 
 function openModal(type = 'topic'){
@@ -615,7 +859,7 @@ function deleteCard(topicId, idx){
     saveToLocal();
     viewTopic(topicId);
     toast('کارت حذف شد');
-    sound.play('tap');
+    sound.play('delete');
   }
 }
 
@@ -646,8 +890,9 @@ function renderStudy(){
     return;
   }
   
-  document.getElementById('home-view').style.display = 'none';
-  document.getElementById('dashboard-view').style.display = 'none';
+  // Hide other views
+  document.getElementById('home-view').classList.remove('active');
+  document.getElementById('dashboard-view').classList.remove('active');
   document.getElementById('study-view').classList.add('active');
   
   document.getElementById('study-view').innerHTML = `
@@ -721,12 +966,23 @@ function rateCard(rating){
   state.stats.todayCards++;
   window.currentStudy.studied++;
   
+  // Different sounds for different ratings
+  if(rating === 1){
+    sound.play('wrong');
+  } else if(rating === 2){
+    sound.play('tap');
+  } else if(rating === 3){
+    sound.play('correct');
+  } else if(rating === 4){
+    sound.play('success');
+    burstConfetti();
+  }
+  
   window.currentStudy.flipped = false;
   window.currentStudy.idx++;
   
   saveToLocal();
   renderStudy();
-  sound.play('success');
 }
 
 function endStudySession(topicId){
@@ -764,6 +1020,7 @@ function endStudySession(topicId){
 function exitStudy(){
   window.currentStudy = null;
   document.getElementById('study-view').classList.remove('active');
+  document.getElementById('study-view').innerHTML = '';
   nav('home');
 }
 
